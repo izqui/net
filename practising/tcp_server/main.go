@@ -38,6 +38,7 @@ func handleConnection(connection net.Conn) {
 	for {
 
 		n, err := connection.Read(buf[0:])
+
 		if err != nil {
 
 			fmt.Println(err)
