@@ -44,14 +44,13 @@ func handleConnection(connection net.Conn) {
 			fmt.Println(err)
 			return
 		}
-		fmt.Println("Read data")
+		fmt.Println(string(buf[0:n]))
 		_, err = connection.Write(buf[0:n])
 		if err != nil {
 
 			fmt.Println(err)
 			return
 		}
-		fmt.Println("Send data")
 	}
 }
 func errorHandling(err error) {

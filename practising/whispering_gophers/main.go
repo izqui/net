@@ -3,8 +3,9 @@ package main
 import (
 	"encoding/json"
 	"flag"
-
+	"fmt"
 	"io"
+	"net"
 	"os"
 )
 
@@ -20,18 +21,28 @@ func init() {
 
 	flag.Parse()
 }
+
 func main() {
 
+	os.Stdout.Write([]byte("Message: "))
+
 	input := readInput(os.Stdin)
+	os.Stdout.Write([]byte(input))
+
 	mes := &Message{Body: string(input)}
-	writeJSON(mes, os.Stdout)
+
+	connection := setupConnection(*address)
+	writeJSON(mes, connection)
+	fmt.Printf("Sent to %s\n", connection.RemoteAddr())
+
+	_, err := os.Stdout.Write(readInput(connection))
+	panicOnError(err)
+
+	connection.Close()
+
 }
 
 func readInput(reader io.Reader) []byte {
-
-	/*stat, err := reader.Stat()
-	panicOnError(err)
-	size := stat.Size()*/
 
 	buf := make([]byte, 512)
 	n, err := reader.Read(buf)
@@ -45,6 +56,17 @@ func writeJSON(mes *Message, writer io.Writer) {
 	enc := json.NewEncoder(writer)
 	err := enc.Encode(mes)
 	panicOnError(err)
+}
+
+func setupConnection(address string) net.Conn {
+
+	tcpAddress, err := net.ResolveTCPAddr("tcp", address)
+	panicOnError(err)
+
+	tcpConnection, err := net.DialTCP("tcp", nil, tcpAddress)
+	panicOnError(err)
+
+	return tcpConnection
 }
 
 func panicOnError(err error) {
