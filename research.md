@@ -5,3 +5,4 @@
 
 ## Go netwoking
 * [Networking programming in go](http://jan.newmarch.name/go/)
+* [Whispering gophers](http://whispering-gophers.appspot.com/talk.slide#1)
