@@ -3,11 +3,9 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io"
 	"net"
 	"os"
-	"bufio"
 )
 
 var (
@@ -27,45 +25,41 @@ func init() {
 
 func main() {
 	incomingConnection := setupIncomingConnection(*port)
-	inputCb := make(chan string)
-	connectionCb := make(chan net.Conn, 1)
+	inputCb := make(chan []byte)
+	connectionCb := make(chan net.Conn)
 	go runReadInput(inputCb)
 	go runConnectionInput(incomingConnection, connectionCb)
 	os.Stdout.Write([]byte("Message: "))
+
 	for {
 		select {
-		case connection := <-connectionCb:
-			fmt.Println("never being called")
-			fmt.Println("data " + string(readInput(connection)))
-			//message := parseJSON()
-			//connection.Close()
-			//writeOutput([]byte(message.Body), os.Stdout)
+
 		case input := <-inputCb:
-			mes := &Message{Body: input}
+			mes := &Message{Body: string(input)}
 			connection := setupOutgoingConnection(*address)
-			fmt.Println("[debug] sending out data")
 			writeOutput(generateJSON(mes), connection)
+
+		case connection := <-connectionCb:
+
+			message := parseJSON(readInput(connection))
+			writeOutput([]byte(message.Body), os.Stdout)
 		}
 	}
 }
-func runReadInput(cb chan string) {
-	in := bufio.NewReader(os.Stdin)
+func runReadInput(cb chan []byte) {
+
 	for {
-		l, err := in.ReadString('\n')
-		panicOnError(err)
-		fmt.Println("[debug] studin input")
-		cb <- l
+
+		input := readInput(os.Stdin)
+		cb <- input
 	}
 }
 func runConnectionInput(connection net.Listener, cb chan net.Conn) {
 	for {
-		fmt.Println("[debug] tcp checker")
+
 		con, err := connection.Accept()
-		fmt.Println("[debug] tcp2")
 		panicOnError(err)
-		fmt.Println("test")
 		cb <- con
-		fmt.Println("FJDSKLJ")
 	}
 }
 func readInput(reader io.Reader) []byte {
@@ -77,10 +71,12 @@ func readInput(reader io.Reader) []byte {
 func writeOutput(content []byte, writer io.Writer) {
 	writer.Write(content)
 }
-func parseJSON(data []byte) (message *Message) {
+func parseJSON(data []byte) *Message {
+
+	message := new(Message)
 	err := json.Unmarshal(data, message)
 	panicOnError(err)
-	return
+	return message
 }
 func generateJSON(mes *Message) []byte {
 	data, err := json.Marshal(mes)
@@ -103,7 +99,7 @@ func setupOutgoingConnection(address string) net.Conn {
 	return tcpConnection
 }
 func panicOnError(err error) {
-	if err != nil {
-		panic(err)
+	if err != nil && err != io.EOF {
+		println(err == io.EOF)
 	}
 }
