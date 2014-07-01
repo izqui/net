@@ -5,12 +5,16 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/izqui/helpers"
 	"io"
 	"net"
 	"os"
 )
 
 type Peer struct {
+	Name           string
+	Address        string
+	ConnectedPeers []Peer
 }
 type Message struct {
 	Body               string `json:"body"`
@@ -21,25 +25,32 @@ type Message struct {
 var (
 	outgoingAddress = flag.String("out", "localhost:3003", "address of peer")
 	port            = flag.String("port", "0", "your local port")
+	name            = flag.String("name", helpers.SHA1([]byte(helpers.RandomString(5))), "name of the peer for the network")
 )
+
+var self *Peer
 
 func init() {
 
 	flag.Parse()
+
+	self = new(Peer)
+	self.Name = *name
+	self.Address = fmt.Sprintf("%s:%s", myIp(), *port)
+
 }
 
 func main() {
 
-	incomingConnection := setupIncomingConnection(myIp() + ":" + *port)
+	incomingConnection := setupIncomingConnection(self.Address)
+	self.Address = incomingConnection.Addr().String()
 
-	fmt.Println("Listening on ", incomingConnection.Addr())
+	fmt.Println(self.Name, "listening on", self.Address)
 
 	inputCb := make(chan []byte)
 	connectionCb := make(chan net.Conn)
 	go runReadInput(inputCb)
 	go runConnectionInput(incomingConnection, connectionCb)
-
-	mes := new(Message)
 
 	for {
 		select {
