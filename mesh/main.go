@@ -13,7 +13,12 @@ import (
 )
 
 var (
-	outgoingAddress = flag.String("out", "localhost:3003", "address of peer")
+	defAd   = "10.0.5.33"
+	defPort = "3003"
+)
+
+var (
+	outgoingAddress = flag.String("out", defAd+":"+defPort, "address of peer")
 	port            = flag.String("port", "0", "your local port")
 	name            = flag.String("name", helpers.SHA1([]byte(helpers.RandomString(5))), "name of the peer for the network")
 )
@@ -43,7 +48,7 @@ func main() {
 
 	go runReadInput(inputCb)
 	go runConnectionInput(incomingConnection, connectionCb)
-	go searchPeersOnPort("8080", searcherCb)
+	go searchPeersOnPort(defPort, searcherCb)
 
 	for {
 		select {
@@ -58,22 +63,21 @@ func main() {
 			message := parseJSON(readInput(connection))
 			fmt.Println(message)
 			if message.Body == "" {
+
 				fmt.Println("add peer")
 				self.AddConnectedPeer(message.Origin)
+				//writeOutput(content, writer)
 
 			} else {
+
 				fmt.Println("! Message from ", message.Origin.Address, " -> ", message.Body)
 			}
 
 		case connection := <-searcherCb:
 
-			if connection.LocalAddr() != incomingConnection.Addr() {
-				//Check I haven't found myself
-
-				fmt.Println("Found a connection opened. Sending my peer info...")
-				mes := &Message{Origin: *self}
-				writeOutput(generateJSON(mes), connection)
-			}
+			fmt.Println("Found a connection opened. Sending my peer info...")
+			mes := &Message{Origin: *self}
+			writeOutput(generateJSON(mes), connection)
 		}
 	}
 }
@@ -87,7 +91,9 @@ func runReadInput(cb chan []byte) {
 func runConnectionInput(connection net.Listener, cb chan net.Conn) {
 	for {
 
+		fmt.Println("waiting for connction")
 		con, err := connection.Accept()
+		fmt.Println("incoming connection from", con.RemoteAddr())
 		panicOnError(err)
 		cb <- con
 	}
@@ -97,20 +103,27 @@ func searchPeersOnPort(port string, cb chan net.Conn) {
 
 	for {
 
+		fmt.Println("Checking for peers")
 		network := []string{"10.0.5.33"}
 		for _, address := range network {
 
-			tcpAddress, err := net.ResolveTCPAddr("tcp", address+":"+port)
+			var tcpAd = address + ":" + port
+
+			tcpAddress, err := net.ResolveTCPAddr("tcp", tcpAd)
 			panicOnError(err)
-			tcpConnection, err := net.DialTCP("tcp", nil, tcpAddress)
 
-			if err == nil && tcpConnection != nil {
+			if tcpAddress.String() != self.Address {
+				//Not looking for myself
 
-				cb <- tcpConnection
+				tcpConnection, err := net.DialTCP("tcp", nil, tcpAddress)
+
+				if err == nil && tcpConnection != nil {
+
+					cb <- tcpConnection
+				}
 			}
 		}
-
-		time.Sleep(5 * time.Second)
+		time.Sleep(2 * time.Second)
 	}
 }
 
@@ -121,7 +134,8 @@ func readInput(reader io.Reader) []byte {
 	return buf[0:n]
 }
 func writeOutput(content []byte, writer io.Writer) {
-	writer.Write(content)
+	_, err := writer.Write(content)
+	panicOnError(err)
 }
 func parseJSON(data []byte) *Message {
 
