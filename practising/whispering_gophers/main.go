@@ -2,21 +2,26 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"net"
 	"os"
 )
 
-var (
-	address = flag.String("address", "localhost:3003", "address of peer")
-	port    = flag.String("port", "8080", "your port")
-)
-
-type Message struct {
-	Body string `json:"body"`
-	//Address string `json:"address"`
+type Peer struct {
 }
+type Message struct {
+	Body               string `json:"body"`
+	OriginAddress      string `json:"origin_address"`
+	DestinationAddress string `json:"destination_address"`
+}
+
+var (
+	outgoingAddress = flag.String("out", "localhost:3003", "address of peer")
+	port            = flag.String("port", "0", "your local port")
+)
 
 func init() {
 
@@ -24,25 +29,30 @@ func init() {
 }
 
 func main() {
-	incomingConnection := setupIncomingConnection(*port)
+
+	incomingConnection := setupIncomingConnection(myIp() + ":" + *port)
+
+	fmt.Println("Listening on ", incomingConnection.Addr())
+
 	inputCb := make(chan []byte)
 	connectionCb := make(chan net.Conn)
 	go runReadInput(inputCb)
 	go runConnectionInput(incomingConnection, connectionCb)
-	os.Stdout.Write([]byte("Message: "))
+
+	mes := new(Message)
 
 	for {
 		select {
 
 		case input := <-inputCb:
-			mes := &Message{Body: string(input)}
-			connection := setupOutgoingConnection(*address)
+			mes := &Message{Body: string(input), OriginAddress: incomingConnection.Addr().String()}
+			connection := setupOutgoingConnection(*outgoingAddress)
 			writeOutput(generateJSON(mes), connection)
 
 		case connection := <-connectionCb:
 
 			message := parseJSON(readInput(connection))
-			writeOutput([]byte(message.Body), os.Stdout)
+			fmt.Println("! Message from ", message.OriginAddress, " -> ", message.Body)
 		}
 	}
 }
@@ -50,8 +60,7 @@ func runReadInput(cb chan []byte) {
 
 	for {
 
-		input := readInput(os.Stdin)
-		cb <- input
+		cb <- readInput(os.Stdin)
 	}
 }
 func runConnectionInput(connection net.Listener, cb chan net.Conn) {
@@ -83,12 +92,11 @@ func generateJSON(mes *Message) []byte {
 	panicOnError(err)
 	return data
 }
-func setupIncomingConnection(port string) net.Listener {
-	tcpAddress, err := net.ResolveTCPAddr("tcp", string(":"+port))
+func setupIncomingConnection(address string) net.Listener {
+
+	listener, err := net.Listen("tcp4", address)
 	panicOnError(err)
-	listener, err := net.ListenTCP("tcp", tcpAddress)
-	panicOnError(err)
-	writeOutput([]byte("Accepting incoming connections on port "+string(port)+" \n"), os.Stdout)
+
 	return listener
 }
 func setupOutgoingConnection(address string) net.Conn {
@@ -100,6 +108,45 @@ func setupOutgoingConnection(address string) net.Conn {
 }
 func panicOnError(err error) {
 	if err != nil && err != io.EOF {
-		println(err == io.EOF)
+		panic(err)
 	}
+}
+
+func myIp() string {
+
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		panicOnError(err)
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 {
+			continue // interface down
+		}
+		if iface.Flags&net.FlagLoopback != 0 {
+			continue // loopback interface
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			panicOnError(err)
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip == nil || ip.IsLoopback() {
+				continue
+			}
+			ip = ip.To4()
+			if ip == nil {
+				continue // not an ipv4 address
+			}
+			return ip.String()
+		}
+	}
+	panicOnError(errors.New("are you connected to the network?"))
+	return ""
 }
