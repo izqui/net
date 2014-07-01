@@ -9,18 +9,8 @@ import (
 	"io"
 	"net"
 	"os"
+	"time"
 )
-
-type Peer struct {
-	Name           string
-	Address        string
-	ConnectedPeers []Peer
-}
-type Message struct {
-	Body               string `json:"body"`
-	OriginAddress      string `json:"origin_address"`
-	DestinationAddress string `json:"destination_address"`
-}
 
 var (
 	outgoingAddress = flag.String("out", "localhost:3003", "address of peer")
@@ -35,7 +25,7 @@ func init() {
 	flag.Parse()
 
 	self = new(Peer)
-	self.Name = *name
+	self.Id = *name
 	self.Address = fmt.Sprintf("%s:%s", myIp(), *port)
 
 }
@@ -45,25 +35,45 @@ func main() {
 	incomingConnection := setupIncomingConnection(self.Address)
 	self.Address = incomingConnection.Addr().String()
 
-	fmt.Println(self.Name, "listening on", self.Address)
+	fmt.Println(self.Id, "listening on", self.Address)
 
 	inputCb := make(chan []byte)
 	connectionCb := make(chan net.Conn)
+	searcherCb := make(chan net.Conn)
+
 	go runReadInput(inputCb)
 	go runConnectionInput(incomingConnection, connectionCb)
+	go searchPeersOnPort("8080", searcherCb)
 
 	for {
 		select {
 
 		case input := <-inputCb:
-			mes := &Message{Body: string(input), OriginAddress: incomingConnection.Addr().String()}
+			mes := &Message{Body: string(input), Origin: *self}
 			connection := setupOutgoingConnection(*outgoingAddress)
 			writeOutput(generateJSON(mes), connection)
 
 		case connection := <-connectionCb:
 
 			message := parseJSON(readInput(connection))
-			fmt.Println("! Message from ", message.OriginAddress, " -> ", message.Body)
+			fmt.Println(message)
+			if message.Body == "" {
+				fmt.Println("add peer")
+				self.AddConnectedPeer(message.Origin)
+
+			} else {
+				fmt.Println("! Message from ", message.Origin.Address, " -> ", message.Body)
+			}
+
+		case connection := <-searcherCb:
+
+			if connection.LocalAddr() != incomingConnection.Addr() {
+				//Check I haven't found myself
+
+				fmt.Println("Found a connection opened. Sending my peer info...")
+				mes := &Message{Origin: *self}
+				writeOutput(generateJSON(mes), connection)
+			}
 		}
 	}
 }
@@ -82,6 +92,28 @@ func runConnectionInput(connection net.Listener, cb chan net.Conn) {
 		cb <- con
 	}
 }
+
+func searchPeersOnPort(port string, cb chan net.Conn) {
+
+	for {
+
+		network := []string{"10.0.5.33"}
+		for _, address := range network {
+
+			tcpAddress, err := net.ResolveTCPAddr("tcp", address+":"+port)
+			panicOnError(err)
+			tcpConnection, err := net.DialTCP("tcp", nil, tcpAddress)
+
+			if err == nil && tcpConnection != nil {
+
+				cb <- tcpConnection
+			}
+		}
+
+		time.Sleep(5 * time.Second)
+	}
+}
+
 func readInput(reader io.Reader) []byte {
 	buf := make([]byte, 512)
 	n, err := reader.Read(buf)
