@@ -20,18 +20,21 @@ var (
 var (
 	outgoingAddress = flag.String("out", defAd+":"+defPort, "address of peer")
 	port            = flag.String("port", "0", "your local port")
-	name            = flag.String("name", helpers.SHA1([]byte(helpers.RandomString(5))), "name of the peer for the network")
+	id              = flag.String("id", helpers.SHA1([]byte(helpers.RandomString(5))), "id of the peer for the network")
 )
 
 var self *Peer
 var sentMessages []string
+
+var currentMessage *Message
+var messageState int = 0
 
 func init() {
 
 	flag.Parse()
 
 	self = new(Peer)
-	self.Id = *name
+	self.Id = *id
 	self.Address = fmt.Sprintf("%s:%s", myIp(), *port)
 
 }
@@ -55,54 +58,54 @@ func main() {
 		select {
 
 		case input := <-inputCb:
-			mes := &Message{Body: string(input), Origin: *self}
-			connection := setupOutgoingConnection(*outgoingAddress)
-			writeOutput(generateJSON(mes), connection)
+			if messageState == 0 {
+
+				var dest_id = string(input)
+				var next_peer = self.FindNearestPeerToId(dest_id)
+
+				if next_peer != nil {
+
+					currentMessage = &Message{Destination: next_peer.Address, FinalDestinationId: dest_id}
+					messageState = 1
+
+					fmt.Println("Sending message to", dest_id, "through", next_peer)
+				} else {
+
+					fmt.Println("Couldn't find peer with that id")
+				}
+
+			} else {
+
+				messageState = 0
+				currentMessage.Body = string(input)
+				currentMessage.Origin = *self
+				connection := setupOutgoingConnection(currentMessage.Destination)
+				writeOutput(generateJSON(currentMessage), connection)
+			}
 
 		case connection := <-connectionCb:
 
-			message := parseJSON(readInput(connection))
-			resp := isResponse(message.Id)
-
-			if message.Body == "" {
-
-				if err := self.AddConnectedPeer(message.Origin); err == nil {
-					fmt.Println("Added peer: self ->", self)
-				}
-				if !resp {
-					var respAddress = message.Origin.Address
-					message.Origin = *self
-					writeOutput(generateJSON(message), setupOutgoingConnection(respAddress))
-				}
-			} else {
-
-				fmt.Println("! Message from ", message.Origin.Address, " -> ", message.Body)
-			}
+			go incomingConnectionHandler(connection)
 
 		case connection := <-searcherCb:
 
-			fmt.Println("Found a connection opened. Sending my peer info...")
-			mes := &Message{Origin: *self}
-			mes.AssignRandomID()
-			messageSent(mes.Id)
-			writeOutput(generateJSON(mes), connection)
-			connection.Close()
+			go foundConnectionHandler(connection)
 		}
 	}
 }
+
 func runReadInput(cb chan []byte) {
 
 	for {
 
-		cb <- readInput(os.Stdin)
+		in := readInput(os.Stdin)
+		cb <- in[:len(in)-1]
 	}
 }
 func runConnectionInput(connection net.Listener, cb chan net.Conn) {
 	for {
 
-		fmt.Println("waiting for connction")
 		con, err := connection.Accept()
-		fmt.Println("incoming connection from", con.RemoteAddr())
 		panicOnError(err)
 		cb <- con
 	}
@@ -112,7 +115,6 @@ func searchPeersOnPort(port string, cb chan net.Conn) {
 
 	for {
 
-		fmt.Println("Checking for peers")
 		network := []string{"10.0.5.33"}
 		for _, address := range network {
 
@@ -121,8 +123,17 @@ func searchPeersOnPort(port string, cb chan net.Conn) {
 			tcpAddress, err := net.ResolveTCPAddr("tcp", tcpAd)
 			panicOnError(err)
 
-			if tcpAddress.String() != self.Address {
-				//Not looking for myself
+			//Check if is already a peer
+			isPeer := false
+			for _, p := range self.ConnectedPeers {
+				if tcpAddress.String() == p.Address {
+					isPeer = true
+					break
+				}
+			}
+
+			if tcpAddress.String() != self.Address && !isPeer {
+				//Not looking for myself nor a peer already connected
 
 				tcpConnection, err := net.DialTCP("tcp", nil, tcpAddress)
 
@@ -133,6 +144,38 @@ func searchPeersOnPort(port string, cb chan net.Conn) {
 			}
 		}
 		time.Sleep(2 * time.Second)
+	}
+}
+
+func foundConnectionHandler(connection net.Conn) {
+
+	fmt.Println("Found a connection opened. Sending my peer info...")
+	mes := &Message{Origin: *self}
+	mes.AssignRandomID()
+	messageSent(mes.Id)
+	writeOutput(generateJSON(mes), connection)
+	connection.Close()
+}
+
+func incomingConnectionHandler(connection net.Conn) {
+
+	message := parseJSON(readInput(connection))
+	resp := isResponse(message.Id)
+
+	if message.Body == "" {
+
+		if err := self.AddConnectedPeer(message.Origin); err == nil {
+			fmt.Println("Added peer: self ->", self)
+		}
+
+		if !resp {
+			var respAddress = message.Origin.Address
+			message.Origin = *self
+			writeOutput(generateJSON(message), setupOutgoingConnection(respAddress))
+		}
+	} else {
+
+		fmt.Println("! Message from ", message.Origin.Address, " -> ", message.Body)
 	}
 }
 

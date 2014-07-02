@@ -2,8 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
-
 	"github.com/izqui/helpers"
 )
 
@@ -14,10 +12,11 @@ type Peer struct {
 }
 
 type Message struct {
-	Id            string `json:"id"`
-	Body          string `json:"body,omitempty"`
-	Origin        Peer   `json:"origin_peer"`
-	DestinationId string `json:"destination_id"`
+	Id                 string `json:"id"`
+	Body               string `json:"body,omitempty"`
+	Origin             Peer   `json:"origin_peer"`
+	Destination        string `json:"-"`
+	FinalDestinationId string `json:"destination_id"`
 }
 
 func (m *Message) AssignRandomID() {
@@ -55,9 +54,6 @@ func (p *Peer) removeIfPresent(id string) {
 		if c.Id == id {
 
 			connected = remove(connected, i)
-		} else {
-
-			fmt.Println("dont remove")
 		}
 
 		c.removeIfPresent(id)
@@ -66,9 +62,53 @@ func (p *Peer) removeIfPresent(id string) {
 	p.ConnectedPeers = connected
 }
 
+func (p *Peer) FindNearestPeerToId(id string) *Peer {
+
+	for _, c := range p.ConnectedPeers {
+
+		if c.Id == id {
+
+			return &c
+		}
+	}
+
+	distance := 1000
+	var peer *Peer = nil
+
+	for _, c := range p.ConnectedPeers {
+
+		n := c.distanceToId(id)
+
+		if n > -1 && n < distance {
+
+			peer = &c
+		}
+	}
+
+	return peer
+}
+
+func (p Peer) distanceToId(id string) int {
+
+	for _, c := range p.ConnectedPeers {
+
+		if c.Id == id {
+
+			return 1
+		}
+
+		n := c.distanceToId(id)
+		if n > -1 {
+
+			return 1 + n
+		}
+	}
+
+	return -1
+}
+
 func remove(slice []Peer, i int) []Peer {
 
-	fmt.Println("remove")
 	copy(slice[i:], slice[i+1:])
 	slice[len(slice)-1] = Peer{}
 	return slice[:len(slice)-1]
