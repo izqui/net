@@ -13,14 +13,13 @@ import (
 )
 
 var (
-	defAd   = "10.0.5.33"
-	defPort = "3003"
+	scanAddr = "10.0.5.33"
 )
 
 var (
-	outgoingAddress = flag.String("out", defAd+":"+defPort, "address of peer")
-	port            = flag.String("port", "0", "your local port")
-	id              = flag.String("id", helpers.SHA1([]byte(helpers.RandomString(5))), "id of the peer for the network")
+	scanPort = flag.String("scan", "3003", "default port for scanning")
+	port     = flag.String("port", "0", "your local port")
+	id       = flag.String("id", helpers.SHA1([]byte(helpers.RandomString(5))), "id of the peer for the network")
 )
 
 var self *Peer
@@ -36,7 +35,6 @@ func init() {
 	self = new(Peer)
 	self.Id = *id
 	self.Address = fmt.Sprintf("%s:%s", myIp(), *port)
-
 }
 
 func main() {
@@ -44,7 +42,7 @@ func main() {
 	incomingConnection := setupIncomingConnection(self.Address)
 	self.Address = incomingConnection.Addr().String()
 
-	fmt.Println(self.Id, "listening on", self.Address)
+	fmt.Println(self.Id, "listening on", self.Address, "scanning on", *scanPort)
 
 	inputCb := make(chan []byte)
 	connectionCb := make(chan net.Conn)
@@ -52,7 +50,7 @@ func main() {
 
 	go runReadInput(inputCb)
 	go runConnectionInput(incomingConnection, connectionCb)
-	go searchPeersOnPort(defPort, searcherCb)
+	go searchPeersOnPort(*scanPort, searcherCb)
 
 	for {
 		select {
@@ -90,7 +88,7 @@ func searchPeersOnPort(port string, cb chan net.Conn) {
 
 	for {
 
-		network := []string{"10.0.5.33"}
+		network := []string{scanAddr}
 		for _, address := range network {
 
 			var tcpAd = address + ":" + port
@@ -144,8 +142,9 @@ func inputHandler(input []byte) {
 
 		messageState = 0
 		currentMessage.Body = string(input)
-		currentMessage.Origin = *self
+		currentMessage.Origin = self
 		currentMessage.AssignRandomID()
+		messageSent(currentMessage.Id)
 
 		connection := setupOutgoingConnection(currentMessage.Destination)
 		writeOutput(generateJSON(currentMessage), connection)
@@ -154,7 +153,7 @@ func inputHandler(input []byte) {
 func foundConnectionHandler(connection net.Conn) {
 
 	fmt.Println("Found a connection opened. Sending my peer info...")
-	mes := &Message{Origin: *self}
+	mes := &Message{Origin: self}
 	mes.AssignRandomID()
 	messageSent(mes.Id)
 	writeOutput(generateJSON(mes), connection)
@@ -169,19 +168,29 @@ func incomingConnectionHandler(connection net.Conn) {
 	if message.Body == "" {
 
 		if err := self.AddConnectedPeer(message.Origin); err == nil {
-			fmt.Println("Added peer: self ->", self)
+			fmt.Println("Self ", self)
+		} else {
+
+			fmt.Println(err)
 		}
 
 		if !resp {
-			var respAddress = message.Origin.Address
-			message.Origin = *self
-			writeOutput(generateJSON(message), setupOutgoingConnection(respAddress))
+
+			messageSent(message.Id)
+
+			message.Origin = self
+			//Broadcast message
+			for _, p := range self.ConnectedPeers {
+
+				writeOutput(generateJSON(message), setupOutgoingConnection(p.Address))
+			}
 		}
+
 	} else if message.FinalDestinationId == self.Id {
 		//Message is for me :)
-		fmt.Println("! Message from ", message.Origin.Address, " -> ", message.Body)
+		fmt.Println("! Message from ", message.Origin.Id, " -> ", message.Body)
 	} else {
-		//Message is not for me :( Broadcasting
+		//Message is not for me. Redirecting it.
 		fmt.Println("Broadcasting message from", message.Origin.Id, "to", message.FinalDestinationId)
 		var next_peer = self.FindNearestPeerToId(message.FinalDestinationId)
 
@@ -197,7 +206,6 @@ func incomingConnectionHandler(connection net.Conn) {
 
 			fmt.Println("Couldn't find peer with that id")
 		}
-
 	}
 }
 
@@ -260,6 +268,7 @@ func myIp() string {
 		if err != nil {
 			panicOnError(err)
 		}
+
 		for _, addr := range addrs {
 			var ip net.IP
 			switch v := addr.(type) {
