@@ -92,6 +92,7 @@ func (p *Peer) AddConnectedPeer(newPeer *Peer) error {
 
 	//Remove myself if I'm referenced in other peers
 	p.removeIfPresent(p.Id)
+	newPeer.removeIfPresent(newPeer.Id)
 
 	return nil
 }
@@ -168,7 +169,7 @@ func (p Peer) distanceToId(id string) int {
 
 	for _, c := range p.ConnectedPeers {
 
-		if c.Id == id {
+		if c != nil && c.Id == id {
 
 			return 1
 		}
