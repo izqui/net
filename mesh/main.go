@@ -58,37 +58,12 @@ func main() {
 		select {
 
 		case input := <-inputCb:
-			if messageState == 0 {
-
-				var dest_id = string(input)
-				var next_peer = self.FindNearestPeerToId(dest_id)
-
-				if next_peer != nil {
-
-					currentMessage = &Message{Destination: next_peer.Address, FinalDestinationId: dest_id}
-					messageState = 1
-
-					fmt.Println("Sending message to", dest_id, "through", next_peer)
-				} else {
-
-					fmt.Println("Couldn't find peer with that id")
-				}
-
-			} else {
-
-				messageState = 0
-				currentMessage.Body = string(input)
-				currentMessage.Origin = *self
-				connection := setupOutgoingConnection(currentMessage.Destination)
-				writeOutput(generateJSON(currentMessage), connection)
-			}
+			go inputHandler(input)
 
 		case connection := <-connectionCb:
-
 			go incomingConnectionHandler(connection)
 
 		case connection := <-searcherCb:
-
 			go foundConnectionHandler(connection)
 		}
 	}
@@ -147,6 +122,35 @@ func searchPeersOnPort(port string, cb chan net.Conn) {
 	}
 }
 
+func inputHandler(input []byte) {
+
+	if messageState == 0 {
+
+		var dest_id = string(input)
+		var next_peer = self.FindNearestPeerToId(dest_id)
+
+		if next_peer != nil {
+
+			currentMessage = &Message{Destination: next_peer.Address, FinalDestinationId: dest_id}
+			messageState = 1
+
+			fmt.Println("Sending message to", dest_id, "through", next_peer)
+		} else {
+
+			fmt.Println("Couldn't find peer with that id")
+		}
+
+	} else {
+
+		messageState = 0
+		currentMessage.Body = string(input)
+		currentMessage.Origin = *self
+		currentMessage.AssignRandomID()
+
+		connection := setupOutgoingConnection(currentMessage.Destination)
+		writeOutput(generateJSON(currentMessage), connection)
+	}
+}
 func foundConnectionHandler(connection net.Conn) {
 
 	fmt.Println("Found a connection opened. Sending my peer info...")
@@ -173,9 +177,27 @@ func incomingConnectionHandler(connection net.Conn) {
 			message.Origin = *self
 			writeOutput(generateJSON(message), setupOutgoingConnection(respAddress))
 		}
-	} else {
-
+	} else if message.FinalDestinationId == self.Id {
+		//Message is for me :)
 		fmt.Println("! Message from ", message.Origin.Address, " -> ", message.Body)
+	} else {
+		//Message is not for me :( Broadcasting
+		fmt.Println("Broadcasting message from", message.Origin.Id, "to", message.FinalDestinationId)
+		var next_peer = self.FindNearestPeerToId(message.FinalDestinationId)
+
+		if next_peer != nil {
+
+			message.Destination = next_peer.Address
+			connection := setupOutgoingConnection(message.Destination)
+			writeOutput(generateJSON(message), connection)
+
+			fmt.Println("Sending message to", message.FinalDestinationId, "through", next_peer)
+
+		} else {
+
+			fmt.Println("Couldn't find peer with that id")
+		}
+
 	}
 }
 
