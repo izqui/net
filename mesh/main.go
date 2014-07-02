@@ -177,7 +177,6 @@ func incomingConnectionHandler(connection net.Conn) {
 		if !resp {
 
 			messageSent(message.Id)
-
 			message.Origin = self
 			//Broadcast message
 			for _, p := range self.ConnectedPeers {
