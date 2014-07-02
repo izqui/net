@@ -2,6 +2,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
+
+	"github.com/izqui/helpers"
 )
 
 type Peer struct {
@@ -11,9 +14,15 @@ type Peer struct {
 }
 
 type Message struct {
+	Id            string `json:"id"`
 	Body          string `json:"body,omitempty"`
 	Origin        Peer   `json:"origin_peer"`
 	DestinationId string `json:"destination_id"`
+}
+
+func (m *Message) AssignRandomID() {
+
+	m.Id = helpers.SHA1([]byte(helpers.RandomString(10)))
 }
 
 func (p *Peer) AddConnectedPeer(newPeer Peer) error {
@@ -32,5 +41,35 @@ func (p *Peer) AddConnectedPeer(newPeer Peer) error {
 	}
 
 	p.ConnectedPeers = append(p.ConnectedPeers, newPeer)
+	p.removeIfPresent(p.Id)
+
 	return nil
+}
+
+func (p *Peer) removeIfPresent(id string) {
+
+	connected := p.ConnectedPeers
+
+	for i, c := range p.ConnectedPeers {
+
+		if c.Id == id {
+
+			connected = remove(connected, i)
+		} else {
+
+			fmt.Println("dont remove")
+		}
+
+		c.removeIfPresent(id)
+	}
+
+	p.ConnectedPeers = connected
+}
+
+func remove(slice []Peer, i int) []Peer {
+
+	fmt.Println("remove")
+	copy(slice[i:], slice[i+1:])
+	slice[len(slice)-1] = Peer{}
+	return slice[:len(slice)-1]
 }

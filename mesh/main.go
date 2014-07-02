@@ -24,6 +24,7 @@ var (
 )
 
 var self *Peer
+var sentMessages []string
 
 func init() {
 
@@ -61,13 +62,18 @@ func main() {
 		case connection := <-connectionCb:
 
 			message := parseJSON(readInput(connection))
+			resp := isResponse(message.Id)
 
 			if message.Body == "" {
 
-				fmt.Println("add peer")
-				self.AddConnectedPeer(message.Origin)
-				fmt.Println(self)
-
+				if err := self.AddConnectedPeer(message.Origin); err == nil {
+					fmt.Println("Added peer: self ->", self)
+				}
+				if !resp {
+					var respAddress = message.Origin.Address
+					message.Origin = *self
+					writeOutput(generateJSON(message), setupOutgoingConnection(respAddress))
+				}
 			} else {
 
 				fmt.Println("! Message from ", message.Origin.Address, " -> ", message.Body)
@@ -77,7 +83,10 @@ func main() {
 
 			fmt.Println("Found a connection opened. Sending my peer info...")
 			mes := &Message{Origin: *self}
+			mes.AssignRandomID()
+			messageSent(mes.Id)
 			writeOutput(generateJSON(mes), connection)
+			connection.Close()
 		}
 	}
 }
@@ -206,4 +215,22 @@ func myIp() string {
 	}
 	panicOnError(errors.New("are you connected to the network?"))
 	return ""
+}
+
+func messageSent(id string) {
+
+	sentMessages = append(sentMessages, id)
+}
+
+func isResponse(id string) bool {
+
+	for _, m := range sentMessages {
+
+		if id == m {
+
+			return true
+		}
+	}
+
+	return false
 }
