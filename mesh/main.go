@@ -61,12 +61,12 @@ func main() {
 		case connection := <-connectionCb:
 
 			message := parseJSON(readInput(connection))
-			fmt.Println(message)
+
 			if message.Body == "" {
 
 				fmt.Println("add peer")
 				self.AddConnectedPeer(message.Origin)
-				//writeOutput(content, writer)
+				fmt.Println(self)
 
 			} else {
 
