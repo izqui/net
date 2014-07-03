@@ -100,7 +100,7 @@ func searchPeersOnPort(port string, cb chan *net.UDPConn) {
 	for {
 
 		//network := []string{scanAddr}
-		network := []string{"255.255.255.255"}
+		network := []string{scanAddr, "255.255.255.255"}
 		for _, address := range network {
 
 			var add = address + ":" + port
@@ -217,13 +217,25 @@ func incomingConnectionHandler(input []byte) {
 	if message.Body == "" {
 
 		if err := self.AddConnectedPeer(message.Origin); err == nil {
+
 			fmt.Println("Self ", self)
+			for _, p := range self.ConnectedPeers {
+
+				if (resp && p.Id != message.Origin.Id) || !resp {
+
+					messageSent(message.Id)
+					respMessage := &Message{Id: message.Id, Origin: self}
+
+					writeOutput(generateJSON(respMessage), setupOutgoingConnection(p.Address))
+				}
+			}
+
 		} else {
 
 			fmt.Println(err)
 		}
 
-		if !resp {
+		/*if !resp {
 
 			messageSent(message.Id)
 			message.Origin = self
@@ -232,7 +244,7 @@ func incomingConnectionHandler(input []byte) {
 
 				writeOutput(generateJSON(message), setupOutgoingConnection(p.Address))
 			}
-		}
+		}*/
 
 	} else if message.FinalDestinationId == self.Id {
 		//Message is for me :)
@@ -347,6 +359,14 @@ func myIp() string {
 }
 
 func messageSent(id string) {
+
+	//Check for already added messages
+	for _, m := range sentMessages {
+
+		if m == id {
+			return
+		}
+	}
 
 	sentMessages = append(sentMessages, id)
 }
