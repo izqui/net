@@ -24,6 +24,13 @@ func (slice PeerSlice) Less(i, j int) bool {
 	return slice[i].Id < slice[j].Id
 }
 
+func (slice PeerSlice) remove(i int) PeerSlice {
+
+	copy(slice[i:], slice[i+1:])
+	slice[len(slice)-1] = nil
+	return slice[:len(slice)-1]
+}
+
 type Peer struct {
 	Id             string    `json:"id"`
 	Address        string    `json:"address"`
@@ -54,9 +61,11 @@ func (p *Peer) String() string {
 				con += c.String()
 			}
 		}
+
+		con = fmt.Sprintf(" -> [%s]", con)
 	}
 
-	return fmt.Sprintf("%s(%s) -> [%s], ", p.Id, p.Address, con)
+	return fmt.Sprintf("%s%s", p.Id, con)
 }
 
 func (p *Peer) AddConnectedPeer(newPeer *Peer) error {
@@ -65,6 +74,8 @@ func (p *Peer) AddConnectedPeer(newPeer *Peer) error {
 
 		return errors.New("You are trying to add yourself as a peer")
 	}
+
+	newPeer.removeIfPresent(p.Id)
 
 	location := -1
 
@@ -91,8 +102,7 @@ func (p *Peer) AddConnectedPeer(newPeer *Peer) error {
 	}
 
 	//Remove myself if I'm referenced in other peers
-	p.removeIfPresent(p.Id)
-	newPeer.removeIfPresent(newPeer.Id)
+	//p.removeIfPresent(p.Id)
 
 	return nil
 }
@@ -119,23 +129,32 @@ func (p *Peer) Hash() string {
 
 func (p *Peer) removeIfPresent(id string) {
 
-	connected := p.ConnectedPeers
+	//connected := p.ConnectedPeers
 
-	for i, c := range p.ConnectedPeers {
+	count := len(p.ConnectedPeers)
+	i := 0
+
+	for i < count {
+
+		c := p.ConnectedPeers[i]
 
 		if c != nil {
 
 			if c.Id == id {
 
-				connected = remove(connected, i)
+				p.ConnectedPeers = p.ConnectedPeers.remove(i)
+				count -= 1
+				i -= 1
+
 			} else {
 
 				c.removeIfPresent(id)
 			}
 		}
+		i++
 	}
 
-	p.ConnectedPeers = connected
+	//p.ConnectedPeers = connected
 }
 
 func (p *Peer) FindNearestPeerToId(id string) *Peer {
@@ -182,11 +201,4 @@ func (p Peer) distanceToId(id string) int {
 	}
 
 	return -1
-}
-
-func remove(slice PeerSlice, i int) PeerSlice {
-
-	copy(slice[i:], slice[i+1:])
-	slice[len(slice)-1] = nil
-	return slice[:len(slice)-1]
 }

@@ -84,7 +84,7 @@ func runConnectionInput(connection *net.UDPConn, cb chan []byte) {
 
 	for {
 
-		var buffer []byte = make([]byte, 512)
+		var buffer []byte = make([]byte, 4096)
 		n, addr, err := connection.ReadFromUDP(buffer[0:])
 		panicOnError(err)
 
@@ -234,17 +234,6 @@ func incomingConnectionHandler(input []byte) {
 
 			fmt.Println(err)
 		}
-
-		/*if !resp {
-
-			messageSent(message.Id)
-			message.Origin = self
-			//Broadcast message
-			for _, p := range self.ConnectedPeers {
-
-				writeOutput(generateJSON(message), setupOutgoingConnection(p.Address))
-			}
-		}*/
 
 	} else if message.FinalDestinationId == self.Id {
 		//Message is for me :)
