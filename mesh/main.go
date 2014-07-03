@@ -26,7 +26,13 @@ var self *Peer
 var sentMessages []string
 
 var currentMessage *Message
-var messageState int = 0
+var messageState = 0
+
+const (
+	START_STATE = iota
+	MESSAGE_STATE
+	CONNECTION_STATE
+)
 
 func init() {
 
@@ -84,8 +90,6 @@ func runConnectionInput(connection *net.UDPConn, cb chan []byte) {
 
 		if addr != nil {
 
-			fmt.Println(addr)
-			fmt.Println(n)
 			cb <- buffer[:n]
 		}
 	}
@@ -95,59 +99,79 @@ func searchPeersOnPort(port string, cb chan *net.UDPConn) {
 
 	for {
 
-		network := []string{scanAddr}
+		//network := []string{scanAddr}
+		network := []string{"255.255.255.255"}
 		for _, address := range network {
 
-			var tcpAd = address + ":" + port
+			var add = address + ":" + port
+			con, err := pingAddress(add)
+			if err == nil && con != nil {
 
-			udpAddress, err := net.ResolveUDPAddr("udp", tcpAd)
-			panicOnError(err)
-
-			//Check if is already a peer
-			isPeer := false
-			for _, p := range self.ConnectedPeers {
-				if udpAddress.String() == p.Address {
-					isPeer = true
-					break
-				}
-			}
-
-			if udpAddress.String() != self.Address && !isPeer {
-				//Not looking for myself nor a peer already connected
-
-				udpConnection, err := net.DialUDP("udp", nil, udpAddress)
-
-				if err == nil && udpConnection != nil {
-
-					cb <- udpConnection
-				}
+				cb <- con
 			}
 		}
+
 		time.Sleep(2 * time.Second)
 	}
 }
 
+func pingAddress(address string) (connection *net.UDPConn, err error) {
+
+	udpAddress, err := net.ResolveUDPAddr("udp", address)
+	if err != nil {
+
+		return nil, err
+	}
+
+	//Check if is already a peer
+	isPeer := false
+	for _, p := range self.ConnectedPeers {
+		if udpAddress.String() == p.Address {
+			isPeer = true
+			break
+		}
+	}
+
+	if udpAddress.String() != self.Address && !isPeer {
+		//Not looking for myself nor a peer already connected
+
+		return net.DialUDP("udp", nil, udpAddress)
+	}
+
+	return nil, errors.New("You are already connected")
+}
+
 func inputHandler(input []byte) {
 
-	if messageState == 0 {
+	switch messageState {
+	case 0:
 
-		var dest_id = string(input)
-		var next_peer = self.FindNearestPeerToId(dest_id)
+		str := string(input)
 
-		if next_peer != nil {
+		if str == "connect" {
 
-			currentMessage = &Message{Destination: next_peer.Address, FinalDestinationId: dest_id}
-			messageState = 1
+			messageState = CONNECTION_STATE
 
-			fmt.Println("Sending message to", dest_id, "through", next_peer)
 		} else {
 
-			fmt.Println("Couldn't find peer with that id")
+			var dest_id = string(input)
+			var next_peer = self.FindNearestPeerToId(dest_id)
+
+			if next_peer != nil {
+
+				currentMessage = &Message{Destination: next_peer.Address, FinalDestinationId: dest_id}
+				messageState = MESSAGE_STATE
+
+				fmt.Println("Sending message to", dest_id, "through", next_peer)
+			} else {
+
+				fmt.Println("Couldn't find peer with that id")
+			}
 		}
 
-	} else {
+	case 1:
 
-		messageState = 0
+		messageState = START_STATE
 		currentMessage.Body = string(input)
 		currentMessage.Origin = self
 		currentMessage.AssignRandomID()
@@ -155,16 +179,34 @@ func inputHandler(input []byte) {
 
 		connection := setupOutgoingConnection(currentMessage.Destination)
 		writeOutput(generateJSON(currentMessage), connection)
+
+	case 2:
+
+		messageState = START_STATE
+
+		con, err := pingAddress(string(input))
+		if err == nil && con != nil {
+
+			sendPeerInfo(con)
+		} else {
+			fmt.Println("Couldn't stablish connection")
+		}
+
 	}
 }
 func foundConnectionHandler(connection *net.UDPConn) {
 
-	fmt.Println("Found a connection opened. Sending my peer info...")
+	//fmt.Println("Found a connection opened. Sending my peer info...")
+	sendPeerInfo(connection)
+	//connection.Close()
+}
+
+func sendPeerInfo(connection *net.UDPConn) {
+
 	mes := &Message{Origin: self}
 	mes.AssignRandomID()
 	messageSent(mes.Id)
 	writeOutput(generateJSON(mes), connection)
-	//connection.Close()
 }
 
 func incomingConnectionHandler(input []byte) {
