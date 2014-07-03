@@ -40,13 +40,12 @@ func init() {
 func main() {
 
 	incomingConnection := setupIncomingConnection(self.Address)
-	self.Address = incomingConnection.Addr().String()
 
 	fmt.Println(self.Id, "listening on", self.Address, "scanning on", *scanPort)
 
 	inputCb := make(chan []byte)
-	connectionCb := make(chan net.Conn)
-	searcherCb := make(chan net.Conn)
+	connectionCb := make(chan []byte)
+	searcherCb := make(chan *net.UDPConn)
 
 	go runReadInput(inputCb)
 	go runConnectionInput(incomingConnection, connectionCb)
@@ -58,8 +57,8 @@ func main() {
 		case input := <-inputCb:
 			go inputHandler(input)
 
-		case connection := <-connectionCb:
-			go incomingConnectionHandler(connection)
+		case input := <-connectionCb:
+			go incomingConnectionHandler(input)
 
 		case connection := <-searcherCb:
 			go foundConnectionHandler(connection)
@@ -75,16 +74,24 @@ func runReadInput(cb chan []byte) {
 		cb <- in[:len(in)-1]
 	}
 }
-func runConnectionInput(connection net.Listener, cb chan net.Conn) {
+func runConnectionInput(connection *net.UDPConn, cb chan []byte) {
+
 	for {
 
-		con, err := connection.Accept()
+		var buffer []byte = make([]byte, 512)
+		n, addr, err := connection.ReadFromUDP(buffer[0:])
 		panicOnError(err)
-		cb <- con
+
+		if addr != nil {
+
+			fmt.Println(addr)
+			fmt.Println(n)
+			cb <- buffer[:n]
+		}
 	}
 }
 
-func searchPeersOnPort(port string, cb chan net.Conn) {
+func searchPeersOnPort(port string, cb chan *net.UDPConn) {
 
 	for {
 
@@ -93,26 +100,26 @@ func searchPeersOnPort(port string, cb chan net.Conn) {
 
 			var tcpAd = address + ":" + port
 
-			tcpAddress, err := net.ResolveTCPAddr("tcp", tcpAd)
+			udpAddress, err := net.ResolveUDPAddr("udp", tcpAd)
 			panicOnError(err)
 
 			//Check if is already a peer
 			isPeer := false
 			for _, p := range self.ConnectedPeers {
-				if tcpAddress.String() == p.Address {
+				if udpAddress.String() == p.Address {
 					isPeer = true
 					break
 				}
 			}
 
-			if tcpAddress.String() != self.Address && !isPeer {
+			if udpAddress.String() != self.Address && !isPeer {
 				//Not looking for myself nor a peer already connected
 
-				tcpConnection, err := net.DialTCP("tcp", nil, tcpAddress)
+				udpConnection, err := net.DialUDP("udp", nil, udpAddress)
 
-				if err == nil && tcpConnection != nil {
+				if err == nil && udpConnection != nil {
 
-					cb <- tcpConnection
+					cb <- udpConnection
 				}
 			}
 		}
@@ -150,19 +157,19 @@ func inputHandler(input []byte) {
 		writeOutput(generateJSON(currentMessage), connection)
 	}
 }
-func foundConnectionHandler(connection net.Conn) {
+func foundConnectionHandler(connection *net.UDPConn) {
 
 	fmt.Println("Found a connection opened. Sending my peer info...")
 	mes := &Message{Origin: self}
 	mes.AssignRandomID()
 	messageSent(mes.Id)
 	writeOutput(generateJSON(mes), connection)
-	connection.Close()
+	//connection.Close()
 }
 
-func incomingConnectionHandler(connection net.Conn) {
+func incomingConnectionHandler(input []byte) {
 
-	message := parseJSON(readInput(connection))
+	message := parseJSON(input)
 	resp := isResponse(message.Id)
 
 	if message.Body == "" {
@@ -230,20 +237,27 @@ func generateJSON(mes *Message) []byte {
 	panicOnError(err)
 	return data
 }
-func setupIncomingConnection(address string) net.Listener {
 
-	listener, err := net.Listen("tcp4", address)
+func setupIncomingConnection(address string) *net.UDPConn {
+
+	addr, err := net.ResolveUDPAddr("udp", address)
 	panicOnError(err)
 
-	return listener
-}
-func setupOutgoingConnection(address string) net.Conn {
-	tcpAddress, err := net.ResolveTCPAddr("tcp", address)
+	con, err := net.ListenUDP("udp", addr)
 	panicOnError(err)
-	tcpConnection, err := net.DialTCP("tcp", nil, tcpAddress)
-	panicOnError(err)
-	return tcpConnection
+
+	return con
 }
+
+func setupOutgoingConnection(address string) *net.UDPConn {
+	udpAddress, err := net.ResolveUDPAddr("udp", address)
+	panicOnError(err)
+	udpConnection, err := net.DialUDP("udp", nil, udpAddress)
+	panicOnError(err)
+
+	return udpConnection
+}
+
 func panicOnError(err error) {
 	if err != nil && err != io.EOF {
 		panic(err)
