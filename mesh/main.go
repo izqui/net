@@ -48,6 +48,7 @@ func main() {
 	incomingConnection := setupIncomingConnection(self.Address)
 
 	fmt.Println(self.Id, "listening on", self.Address, "scanning on", *scanPort)
+	fmt.Println("Network: ", self)
 
 	inputCb := make(chan []byte)
 	connectionCb := make(chan []byte)
@@ -218,7 +219,7 @@ func incomingConnectionHandler(input []byte) {
 
 		if err := self.AddConnectedPeer(message.Origin); err == nil {
 
-			fmt.Println("Self ", self)
+			fmt.Println("Network: ", self)
 			for _, p := range self.ConnectedPeers {
 
 				if (resp && p.Id != message.Origin.Id) || !resp {
@@ -229,10 +230,6 @@ func incomingConnectionHandler(input []byte) {
 					writeOutput(generateJSON(respMessage), setupOutgoingConnection(p.Address))
 				}
 			}
-
-		} else {
-
-			fmt.Println(err)
 		}
 
 	} else if message.FinalDestinationId == self.Id {

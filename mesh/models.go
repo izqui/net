@@ -129,8 +129,6 @@ func (p *Peer) Hash() string {
 
 func (p *Peer) removeIfPresent(id string) {
 
-	//connected := p.ConnectedPeers
-
 	count := len(p.ConnectedPeers)
 	i := 0
 
@@ -153,8 +151,6 @@ func (p *Peer) removeIfPresent(id string) {
 		}
 		i++
 	}
-
-	//p.ConnectedPeers = connected
 }
 
 func (p *Peer) FindNearestPeerToId(id string) *Peer {
