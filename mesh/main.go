@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"github.com/izqui/helpers"
@@ -115,32 +114,6 @@ func searchPeersOnPort(port string, cb chan *net.UDPConn) {
 	}
 }
 
-func pingAddress(address string) (connection *net.UDPConn, err error) {
-
-	udpAddress, err := net.ResolveUDPAddr("udp", address)
-	if err != nil {
-
-		return nil, err
-	}
-
-	//Check if is already a peer
-	isPeer := false
-	for _, p := range self.ConnectedPeers {
-		if udpAddress.String() == p.Address {
-			isPeer = true
-			break
-		}
-	}
-
-	if udpAddress.String() != self.Address && !isPeer {
-		//Not looking for myself nor a peer already connected
-
-		return net.DialUDP("udp", nil, udpAddress)
-	}
-
-	return nil, errors.New("You are already connected")
-}
-
 func inputHandler(input []byte) {
 
 	switch messageState {
@@ -175,23 +148,13 @@ func inputHandler(input []byte) {
 		currentMessage.Body = string(input)
 		currentMessage.Origin = self
 		currentMessage.AssignRandomID()
-		messageSent(currentMessage.Id)
 
-		connection := setupOutgoingConnection(currentMessage.Destination)
-		writeOutput(generateJSON(currentMessage), connection)
+		self.SendMessage(currentMessage, currentMessage.Destination)
 
 	case 2:
 
 		messageState = START_STATE
-
-		con, err := pingAddress(string(input))
-		if err == nil && con != nil {
-
-			sendPeerInfo(con)
-		} else {
-			fmt.Println("Couldn't stablish connection")
-		}
-
+		self.StablishConnection(string(input))
 	}
 }
 
