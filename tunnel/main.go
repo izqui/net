@@ -10,15 +10,11 @@ import (
 
 func main() {
 
-	tund, err := tuntap.Open("tun0", tuntap.DevTun, false)
+	tund, err := tuntap.Open("tap0", tuntap.DevTap, false)
 	panicOnError(err)
 
-	cmd := exec.Command("ifconfig", "tun0", "inet6", "fe80::1", "up")
+	cmd := exec.Command("ifconfig", "tap0", "inet6", "beef::1/10", "up")
 	out, err := cmd.Output()
-	panicOnError(err)
-
-	cmd = exec.Command("route", "-n", "add", "-inet6", "beef::/10", "fe80::1")
-	out, err = cmd.Output()
 	panicOnError(err)
 
 	fmt.Println(string(out))
