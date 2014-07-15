@@ -13,8 +13,14 @@ func main() {
 	tund, err := tuntap.Open("tap0", tuntap.DevTap, false)
 	panicOnError(err)
 
-	cmd := exec.Command("ifconfig", "tap0", "inet6", "beef::1/10", "up")
+	cmd := exec.Command("ifconfig", "tap0", "inet6", "beef::1", "up")
 	out, err := cmd.Output()
+	panicOnError(err)
+
+	time.Sleep(50 * time.Second)
+
+	cmd = exec.Command("route", "-n", "add", "-inet6", "beef::/10", "beef::1", "-interface", "tap0")
+	out, err = cmd.Output()
 	panicOnError(err)
 
 	fmt.Println(string(out))
