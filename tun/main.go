@@ -6,7 +6,7 @@ import (
 	"io"
 	"net"
 	"os/exec"
-	"time"
+	"reflect"
 )
 
 const (
@@ -16,7 +16,7 @@ const (
 	MY_ID = "beef::52"
 )
 
-type PacketsCallback chan tuntap.IPPacket
+type PacketsCallback chan *tuntap.IPPacket
 
 func main() {
 
@@ -28,20 +28,20 @@ func main() {
 		select {
 		case packet := <-cb:
 
-			var source net.IP = packet.Header.SourceAddr()
-			var dest net.IP = packet.Header.DestAddr()
-			var me net.IP = net.ParseIP(MY_ID)
+			source := net.IP(packet.Header.SourceAddr())
+			dest := net.IP(packet.Header.DestAddr())
+			me := net.ParseIP(MY_ID)
 
-			if source.IsMulticast() {
+			if dest.IsMulticast() {
 
 				fmt.Println("Multicast packet received")
 
-			} else if dest == me {
-
-				fmt.Println("Packet received from", source.String())
+			} else if reflect.DeepEqual(dest, me) {
+				//Packet is for me?
+				fmt.Println("Packet for me received from", source)
 			} else {
 
-				fmt.Println("Packet that is not for me received")
+				fmt.Println("Packet that is not for me received", source, dest)
 			}
 		}
 	}
