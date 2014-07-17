@@ -46,7 +46,6 @@ func init() {
 
 func main() {
 
-	fmt.Println("hey")
 	incomingConnection := setupIncomingConnection(self.Address)
 
 	if *bossBool {

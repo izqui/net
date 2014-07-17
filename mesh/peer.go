@@ -203,6 +203,11 @@ func (p *Peer) HandleIncomingConnection(input []byte) {
 				if (resp && p.Id != message.Origin.Id) || !resp {
 
 					respMessage := &Message{Id: message.Id, Origin: self}
+
+					if boss != nil {
+						boss.SendPeerInfo(self)
+					}
+
 					p.send(respMessage, p.Address)
 				}
 			}

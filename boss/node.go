@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/izqui/functional"
 	"github.com/izqui/helpers"
 	"net"
 	"os/exec"
@@ -34,6 +35,7 @@ type Node struct {
 	//Mesh
 	PeerAddress string
 	Id          string
+	Connections []string
 }
 
 func BootUpNode(id string, port int) {
@@ -57,6 +59,15 @@ func (n *Node) GetInfo() {
 	panicOnError(err)
 }
 
+func (n *Node) ConnectToNode(addr string) {
+
+	b, err := json.Marshal(BossPacket{Type: ConnectType, Data: addr})
+	panicOnError(err)
+
+	_, err = n.BossConnection.Write(b)
+	panicOnError(err)
+}
+
 func (n *Node) ListenForConnections() {
 
 	for {
@@ -74,8 +85,37 @@ func (n *Node) ListenForConnections() {
 
 			case InfoType:
 
-				fmt.Println(packet.Data, packet.PeerData)
-				n.GetInfo()
+				n.Id = packet.PeerData.Id
+				n.PeerAddress = packet.PeerData.Address
+
+				//Figure out what connections to do
+				toadd := functional.Filter(func(p Peer) (f bool) {
+
+					if p.Id != n.Id {
+
+						for _, node := range n.Connections {
+
+							if node == p.Id {
+								//If we already added it, we are not interested
+								return
+							}
+						}
+						for _, node := range nodes {
+
+							if node.Id == p.Id {
+								//If it is among nodes in boss, add it
+								f = true
+							}
+						}
+					}
+
+					return
+
+				}, packet.PeerData.ConnectedPeers)
+
+				n.Connections = append(n.Connections, functional.DoMap(func(p Peer) string { return p.Id }, toadd).([]string)...)
+				fmt.Println(n)
+
 			}
 		}
 	}
