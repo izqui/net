@@ -6,24 +6,27 @@ import (
 	"github.com/izqui/helpers"
 	"io"
 	"net"
-	"os"
 	"time"
 )
 
 var (
-	scanAddr = "10.0.5.33"
+	myIp, scanAddr = "::1", "::1"
 )
 
 var (
 	scanPort = flag.String("scan", "3003", "default port for scanning")
-	port     = flag.String("port", "0", "your local port")
+	port     = flag.String("port", "9999", "your local port")
 	id       = flag.String("id", helpers.SHA1([]byte(helpers.RandomString(5))), "id of the peer for the network")
+	noinput  = flag.Bool("noinput", false, "no input for automatic nodes")
+
+	bossBool = flag.Bool("boss", false, "whether you want a boss or not")
+	bossAddr = flag.String("bossAddr", "[::1]:3000", "boss location")
 )
 
 var self *Peer
-var sentMessages []string
+var boss *Boss
 
-var currentMessage *Message
+var sendId string
 var messageState = 0
 
 const (
@@ -38,21 +41,32 @@ func init() {
 
 	self = new(Peer)
 	self.Id = *id
-	self.Address = fmt.Sprintf("%s:%s", myIp(), *port)
+	self.Address = fmt.Sprintf("[%s]:%s", myIp, *port)
 }
 
 func main() {
 
+	fmt.Println("hey")
 	incomingConnection := setupIncomingConnection(self.Address)
 
+	if *bossBool {
+
+		boss = SetupBossOnAddress(*bossAddr)
+		go boss.ListenAndHandleBoss()
+	}
+
+	fmt.Println("ok")
 	fmt.Println(self.Id, "listening on", self.Address, "scanning on", *scanPort)
 	fmt.Println("Network: ", self)
 
-	inputCb := make(chan []byte)
+	inputCb := make(chan string)
 	connectionCb := make(chan []byte)
 	searcherCb := make(chan *net.UDPConn)
 
-	go runReadInput(inputCb)
+	if *noinput == false {
+
+		go runReadInput(inputCb)
+	}
 	go runConnectionInput(incomingConnection, connectionCb)
 	go searchPeersOnPort(*scanPort, searcherCb)
 
@@ -71,12 +85,18 @@ func main() {
 	}
 }
 
-func runReadInput(cb chan []byte) {
+func runReadInput(cb chan string) {
 
 	for {
 
-		in := readInput(os.Stdin)
-		cb <- in[:len(in)-1]
+		var input string
+		n, err := fmt.Scanf("%s\n", &input)
+
+		if n > 0 {
+
+			panicOnError(err)
+			cb <- input
+		}
 	}
 }
 func runConnectionInput(connection *net.UDPConn, cb chan []byte) {
@@ -114,7 +134,7 @@ func searchPeersOnPort(port string, cb chan *net.UDPConn) {
 	}
 }
 
-func inputHandler(input []byte) {
+func inputHandler(input string) {
 
 	switch messageState {
 	case 0:
@@ -127,34 +147,23 @@ func inputHandler(input []byte) {
 
 		} else {
 
-			var dest_id = string(input)
-			var next_peer = self.FindNearestPeerToId(dest_id)
+			sendId = input
+			messageState = MESSAGE_STATE
 
-			if next_peer != nil {
-
-				currentMessage = &Message{Destination: next_peer.Address, FinalDestinationId: dest_id}
-				messageState = MESSAGE_STATE
-
-				fmt.Println("Sending message to", dest_id, "through", next_peer)
-			} else {
-
-				fmt.Println("Couldn't find peer with that id")
-			}
 		}
 
 	case 1:
 
 		messageState = START_STATE
-		currentMessage.Body = string(input)
-		currentMessage.Origin = self
-		currentMessage.AssignRandomID()
 
-		self.SendMessage(currentMessage, currentMessage.Destination)
+		message := &Message{Body: input}
+
+		self.SendMessage(message, sendId)
 
 	case 2:
 
 		messageState = START_STATE
-		self.StablishConnection(string(input))
+		self.StablishConnection(input)
 	}
 }
 

@@ -11,7 +11,7 @@ import (
 
 const (
 	name  = "tun0"
-	link  = "fe80::1"
+	link  = "baaf::1"
 	mask  = "beef::/112"
 	MY_ID = "beef::52"
 )
@@ -21,7 +21,9 @@ type PacketsCallback chan *tuntap.IPPacket
 func main() {
 
 	cb := make(PacketsCallback)
-	go setupInterface(cb)
+
+	tun := setupInterface()
+	go listenOnInterface(tun, cb)
 
 	for {
 
@@ -38,7 +40,15 @@ func main() {
 
 			} else if reflect.DeepEqual(dest, me) {
 				//Packet is for me?
-				fmt.Println("Packet for me received from", source)
+
+				packet.Header.SetSourceAddr(me)
+				packet.Header.SetDestAddr(net.ParseIP("::1"))
+
+				fmt.Println(net.IP(packet.Header.SourceAddr()), net.IP(packet.Header.DestAddr()))
+
+				err := tun.WritePacket(packet)
+				panicOnError(err)
+
 			} else {
 
 				fmt.Println("Packet that is not for me received", source, dest)
@@ -48,7 +58,7 @@ func main() {
 
 }
 
-func setupInterface(cb PacketsCallback) {
+func setupInterface() *tuntap.Interface {
 
 	tund, err := tuntap.Open(name, tuntap.DevTun, false)
 	panicOnError(err)
@@ -64,9 +74,14 @@ func setupInterface(cb PacketsCallback) {
 	panicOnError(err)
 	fmt.Println(string(out))
 
+	return tund
+}
+
+func listenOnInterface(tun *tuntap.Interface, cb PacketsCallback) {
+
 	for {
 
-		packet, err := tund.ReadPacket()
+		packet, err := tun.ReadPacket()
 
 		if err == nil && packet != nil {
 

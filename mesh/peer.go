@@ -203,7 +203,7 @@ func (p *Peer) HandleIncomingConnection(input []byte) {
 				if (resp && p.Id != message.Origin.Id) || !resp {
 
 					respMessage := &Message{Id: message.Id, Origin: self}
-					p.SendMessage(respMessage, p.Address)
+					p.send(respMessage, p.Address)
 				}
 			}
 		}
@@ -220,7 +220,7 @@ func (p *Peer) HandleIncomingConnection(input []byte) {
 
 			message.Destination = next_peer.Address
 
-			p.SendMessage(message, message.Destination)
+			p.send(message, message.Destination)
 
 			fmt.Println("Sending message to", message.FinalDestinationId, "through", next_peer)
 
@@ -256,7 +256,31 @@ func (p *Peer) isExistingMessage(id string) bool {
 	return false
 }
 
-func (p *Peer) SendMessage(message *Message, address string) {
+func (p *Peer) SendMessage(mes *Message, toPeerId string) {
+
+	var next_peer = self.FindNearestPeerToId(toPeerId)
+
+	if next_peer != nil {
+
+		mes.Destination = next_peer.Address
+		mes.FinalDestinationId = toPeerId
+		messageState = MESSAGE_STATE
+
+		fmt.Println("Sending message to", toPeerId, "through", next_peer.Id)
+
+	} else {
+
+		fmt.Println("Couldn't find peer with that id")
+		return
+	}
+
+	mes.Origin = p
+	mes.AssignRandomID()
+
+	p.send(mes, next_peer.Address)
+}
+
+func (p *Peer) send(message *Message, address string) {
 
 	connection := setupOutgoingConnection(address)
 	writeOutput(generateJSON(message), connection)
@@ -273,7 +297,7 @@ func (p *Peer) StablishConnection(address string) {
 
 		mes := &Message{Origin: self}
 		mes.AssignRandomID()
-		p.SendMessage(mes, address)
+		p.send(mes, address)
 
 	} else {
 		fmt.Println("Couldn't stablish connection")
