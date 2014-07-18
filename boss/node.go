@@ -17,9 +17,16 @@ const (
 )
 
 type BossPacket struct {
-	Type     int    `json:"type"`
-	Data     string `json:"data, omitempty"`
-	PeerData Peer   `json:"peerData, omitempty"`
+	Type        int         `json:"type"`
+	Data        string      `json:"data,omitempty"`
+	PeerData    Peer        `json:"peerData,omitempty"`
+	MessageData BossMessage `json:"messageData,omitempty"`
+}
+
+type BossMessage struct {
+	From string `json:"from,omitempty"`
+	To   string `json:"to"`
+	Body string `json:"body,omitempty"`
 }
 
 type Peer struct {
