@@ -25,8 +25,7 @@ type BossPacket struct {
 
 type BossMessage struct {
 	From string `json:"from,omitempty"`
-	To   string `json:"to"`
-	Body string `json:"body,omitempty"`
+	To   string `json:"to,omitempty"`
 }
 
 type Peer struct {
@@ -69,6 +68,15 @@ func (n *Node) GetInfo() {
 func (n *Node) ConnectToNode(addr string) {
 
 	b, err := json.Marshal(BossPacket{Type: ConnectType, Data: addr})
+	panicOnError(err)
+
+	_, err = n.BossConnection.Write(b)
+	panicOnError(err)
+}
+
+func (n *Node) SendMessageToNode(id string) {
+
+	b, err := json.Marshal(BossPacket{Type: MessageType, MessageData: BossMessage{To: id}})
 	panicOnError(err)
 
 	_, err = n.BossConnection.Write(b)
@@ -120,9 +128,20 @@ func (n *Node) ListenForConnections() {
 
 				}, packet.PeerData.ConnectedPeers)
 
-				n.Connections = append(n.Connections, functional.DoMap(func(p Peer) string { return p.Id }, toadd).([]string)...)
+				n.Connections = append(n.Connections, functional.Map(func(p Peer) string { return p.Id }, toadd).([]string)...)
 				fmt.Println(n)
 
+			case MessageType:
+				//This can be: I forwarded a message (from, to) or I received a message (from, body)
+				message := packet.MessageData
+
+				if message.To == packet.PeerData.Id {
+
+					fmt.Println(message.To, "received message from", message.From)
+				} else {
+
+					fmt.Println(message.From, "forwards message to", message.To)
+				}
 			}
 		}
 	}

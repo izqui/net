@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"time"
 )
 
 var (
@@ -20,8 +21,8 @@ func main() {
 	listener := setupTCPListener(*port)
 	fmt.Println("TCP connection opened on", *port)
 
-	go BootUpNode("A", 0)
-	go BootUpNode("B", 0)
+	//go BootUpNode("A", 0)
+	//go BootUpNode("B", 0)
 
 	cb := make(ConnectionCallback)
 	go listenTCP(listener, cb)
@@ -45,7 +46,10 @@ func main() {
 
 		case <-cb2:
 
+			fmt.Println(nodes[0].Id)
 			nodes[1].ConnectToNode(nodes[0].PeerAddress)
+			time.Sleep(1 * time.Second)
+			nodes[1].SendMessageToNode(nodes[0].Id)
 		}
 	}
 }

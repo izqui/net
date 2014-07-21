@@ -148,16 +148,15 @@ func inputHandler(input string) {
 
 			sendId = input
 			messageState = MESSAGE_STATE
-
 		}
 
 	case 1:
 
-		messageState = START_STATE
-
 		message := &Message{Body: input}
 
 		self.SendMessage(message, sendId)
+		sendId = ""
+		messageState = START_STATE
 
 	case 2:
 

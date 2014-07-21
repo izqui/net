@@ -215,16 +215,19 @@ func (p *Peer) HandleIncomingConnection(input []byte) {
 
 	} else if message.FinalDestinationId == self.Id {
 		//Message is for me :)
+		boss.SendMessageFlowInfo(message.Origin.Id, self.Id)
 		fmt.Println("! Message from ", message.Origin.Id, " -> ", message.Body)
 	} else {
 		//Message is not for me. Redirecting it.
 		fmt.Println("Broadcasting message from", message.Origin.Id, "to", message.FinalDestinationId)
+
 		var next_peer = p.FindNearestPeerToId(message.FinalDestinationId)
 
 		if next_peer != nil {
 
 			message.Destination = next_peer.Address
 
+			boss.SendMessageFlowInfo(self.Id, next_peer.Address)
 			p.send(message, message.Destination)
 
 			fmt.Println("Sending message to", message.FinalDestinationId, "through", next_peer)

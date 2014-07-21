@@ -10,6 +10,7 @@ const (
 	InfoType = iota + 1
 	MessageType
 	ConnectType
+	EventType
 )
 
 type BossPacket struct {
@@ -21,8 +22,7 @@ type BossPacket struct {
 
 type BossMessage struct {
 	From string `json:"from,omitempty"`
-	To   string `json:"to"`
-	Body string `json:"body,omitempty"`
+	To   string `json:"to,omitempty"`
 }
 
 type Boss struct {
@@ -61,7 +61,11 @@ func (b *Boss) ListenAndHandleBoss() {
 
 			case ConnectType:
 				go self.StablishConnection(packet.Data)
+
+			case MessageType:
+				go self.SendMessage(&Message{Body: "Boss message"}, packet.MessageData.To)
 			}
+
 		}
 	}
 }
@@ -72,6 +76,19 @@ func (b *Boss) SendPeerInfo(p *Peer) {
 
 	packet.Type = InfoType
 	packet.PeerData = *p
+
+	pa, err := json.Marshal(packet)
+	panicOnError(err)
+
+	writeOutput(pa, b.Connection)
+}
+
+func (b *Boss) SendMessageFlowInfo(from, to string) {
+
+	packet := new(BossPacket)
+	packet.Type = MessageType
+	packet.MessageData = BossMessage{To: to, From: from}
+	packet.PeerData = Peer{Id: self.Id}
 
 	pa, err := json.Marshal(packet)
 	panicOnError(err)
