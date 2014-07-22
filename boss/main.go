@@ -7,10 +7,12 @@ import (
 )
 
 var (
-	port = flag.String("port", "3000", "boss port")
+	port          = flag.String("port", "3000", "boss port")
+	interfacePort = flag.String("interface", "7777", "interface port")
 )
 
 var nodes = []*Node{}
+var socket Socket
 
 func init() {
 
@@ -18,12 +20,14 @@ func init() {
 }
 func main() {
 
-	listener := setupTCPListener(*port)
-	fmt.Println("TCP connection opened on", *port)
+	socket = setupWebSocket()
+	go socket.Listen(*interfacePort)
 
 	//go BootUpNode("A", 0)
 	//go BootUpNode("B", 0)
 
+	listener := setupTCPListener(*port)
+	fmt.Println("TCP connection opened on", *port)
 	cb := make(ConnectionCallback)
 	go listenTCP(listener, cb)
 

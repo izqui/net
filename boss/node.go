@@ -96,6 +96,7 @@ func (n *Node) ListenForConnections() {
 			packet := new(BossPacket)
 			json.Unmarshal(buffer[:nu], packet)
 
+			socket.Broadcast("data", packet.Type)
 			switch packet.Type {
 
 			case InfoType:
