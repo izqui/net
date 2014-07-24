@@ -3,8 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/izqui/helpers"
-	"time"
+	_ "time"
 )
 
 var (
@@ -23,7 +22,7 @@ func main() {
 
 	socket = setupWebSocket()
 	socket.ConnectCallback = make(SocketCallback)
-	socket.NodeCallback = make(DataCallback)
+	socket.NodeCallback = make(DataCallback, 10000)
 	socket.MessageCallback = make(DataCallback)
 	socket.LinkCallback = make(DataCallback)
 
@@ -60,15 +59,17 @@ func main() {
 			go socket.SendNodes(so, nodes...)
 
 		case <-socket.NodeCallback:
-
-			go BootUpNode(helpers.RandomString(5), 0)
+			//Not working for some reason
 
 		case <-cb2:
 
-			fmt.Println(nodes[0].Id)
+			//On enter. Just a test
+			socket.NodeCallback <- "hello"
+
+			/*fmt.Println(nodes[0].Id)
 			nodes[1].ConnectToNode(nodes[0].PeerAddress)
 			time.Sleep(1 * time.Second)
-			nodes[1].SendMessageToNode(nodes[0].Id)
+			nodes[1].SendMessageToNode(nodes[0].Id)*/
 		}
 	}
 }
