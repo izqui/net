@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/izqui/helpers"
 	"time"
 )
 
@@ -12,7 +13,7 @@ var (
 )
 
 var nodes = []*Node{}
-var socket Socket
+var socket *SocketServer
 
 func init() {
 
@@ -21,15 +22,17 @@ func init() {
 func main() {
 
 	socket = setupWebSocket()
-	go socket.Listen(*interfacePort)
+	socket.ConnectCallback = make(SocketCallback)
+	socket.NodeCallback = make(DataCallback)
+	socket.MessageCallback = make(DataCallback)
+	socket.LinkCallback = make(DataCallback)
 
-	//go BootUpNode("A", 0)
-	//go BootUpNode("B", 0)
+	go socket.Listen(*interfacePort)
 
 	listener := setupTCPListener(*port)
 	fmt.Println("TCP connection opened on", *port)
-	cb := make(ConnectionCallback)
-	go listenTCP(listener, cb)
+	bossCb := make(ConnectionCallback)
+	go listenTCP(listener, bossCb)
 
 	cb2 := make(chan bool)
 	go input(cb2)
@@ -38,15 +41,27 @@ func main() {
 
 		select {
 
-		case conn := <-cb:
+		case conn := <-bossCb:
 
-			fmt.Println("New connection")
+			fmt.Println("New peer connection")
 
 			node := &Node{BossConnection: conn}
 			nodes = append(nodes, node)
 
-			go node.ListenForConnections()
+			go node.ListenForConnections(func() {
+
+				fmt.Println("Node disconnected")
+			})
 			node.GetInfo()
+
+		case so := <-socket.ConnectCallback:
+
+			fmt.Println("New socket connection")
+			go socket.SendNodes(so, nodes...)
+
+		case <-socket.NodeCallback:
+
+			go BootUpNode(helpers.RandomString(5), 0)
 
 		case <-cb2:
 

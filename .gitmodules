@@ -1,0 +1,3 @@
+[submodule "boss/visualization"]
+	path = boss/visualization
+	url = https://github.com/jedahan/mesh-visualisation.git

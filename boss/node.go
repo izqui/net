@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/izqui/functional"
 	"github.com/izqui/helpers"
+	"io"
 	"net"
 	"os/exec"
 	"strconv"
@@ -36,12 +37,12 @@ type Peer struct {
 }
 
 type Node struct {
-	BossConnection *net.TCPConn
+	BossConnection *net.TCPConn `json:"-"`
 
 	//Mesh
-	PeerAddress string
-	Id          string
-	Connections []string
+	PeerAddress string   `json:"address"`
+	Id          string   `json:"id"`
+	Connections []string `json:"-"`
 }
 
 func BootUpNode(id string, port int) {
@@ -83,26 +84,33 @@ func (n *Node) SendMessageToNode(id string) {
 	panicOnError(err)
 }
 
-func (n *Node) ListenForConnections() {
+func (n *Node) ListenForConnections(disconnection func()) {
 
 	for {
 
 		var buffer []byte = make([]byte, 4096)
 		nu, err := n.BossConnection.Read(buffer[0:])
-		panicOnError(err)
+
+		if err == io.EOF {
+
+			n = nil
+			disconnection()
+			break
+		}
 
 		if nu > 0 {
 
 			packet := new(BossPacket)
 			json.Unmarshal(buffer[:nu], packet)
 
-			socket.Broadcast("data", packet.Type)
 			switch packet.Type {
 
 			case InfoType:
 
 				n.Id = packet.PeerData.Id
 				n.PeerAddress = packet.PeerData.Address
+
+				socket.SendNodes(nil, n)
 
 				//Figure out what connections to do
 				toadd := functional.Filter(func(p Peer) (f bool) {
@@ -130,7 +138,6 @@ func (n *Node) ListenForConnections() {
 				}, packet.PeerData.ConnectedPeers)
 
 				n.Connections = append(n.Connections, functional.Map(func(p Peer) string { return p.Id }, toadd).([]string)...)
-				fmt.Println(n)
 
 			case MessageType:
 				//This can be: I forwarded a message (from, to) or I received a message (from, body)

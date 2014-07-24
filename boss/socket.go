@@ -1,32 +1,91 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	io "github.com/googollee/go-socket.io"
+	io "github.com/izqui/go-socket.io"
 	"net/http"
 )
 
-type Socket struct {
-	server *io.SocketIOServer
+type SocketCallback chan io.Socket
+type DataCallback chan string
+
+type SocketServer struct {
+	ConnectCallback                             SocketCallback
+	NodeCallback, LinkCallback, MessageCallback DataCallback
+	Sockets                                     []*io.Socket
+
+	Server *io.Server
 }
 
-func setupWebSocket() Socket {
+func setupWebSocket() *SocketServer {
 
-	conf := &io.Config{ClosingTimeout: 2}
+	socket := &SocketServer{}
+	socket.Server = io.NewServer(io.DefaultConfig)
 
-	s := io.NewSocketIOServer(conf)
-	s.Handle("/", http.FileServer(http.Dir("./public")))
+	http.Handle("/socket.io/", socket.Server)
+	http.Handle("/", http.FileServer(http.Dir("./visualization/public")))
 
-	return Socket{server: s}
+	return socket
 }
 
-func (s Socket) Listen(port string) {
+func (s *SocketServer) Listen(port string) {
+
+	callbackFunction := func(cb DataCallback) func(d string) {
+		return func(d string) {
+
+			fmt.Println("Event")
+			if cb != nil {
+				cb <- d
+			}
+		}
+	}
+
+	socket.Server.On("connection", func(so io.Socket) {
+
+		s.Sockets = append(s.Sockets, &so)
+
+		so.On("addnode", callbackFunction(socket.NodeCallback))
+		so.On("addlink", callbackFunction(socket.LinkCallback))
+		so.On("message", callbackFunction(socket.MessageCallback))
+
+		socket.ConnectCallback <- so
+	})
+
+	socket.Server.On("error", func(so io.Socket, err error) {
+		fmt.Println("error:", err)
+	})
 
 	fmt.Println("Interface running on port", port)
-	panic(http.ListenAndServe(":"+port, s.server))
+	panic(http.ListenAndServe(":"+port, nil))
 }
 
-func (s Socket) Broadcast(name string, args ...interface{}) {
+func (s *SocketServer) SendNodes(so io.Socket, nodes ...*Node) {
 
-	s.server.Broadcast(name, args...)
+	var sendnodes func(ttl int, so io.Socket, nodes ...*Node)
+	sendnodes = func(ttl int, so io.Socket, nodes ...*Node) {
+
+		//If destination socket is nil, broadcast to all connected sockets
+		if so == nil {
+
+			//Avoid entering in loops when sockets have disconnected
+			if ttl != 0 {
+				return
+			}
+
+			for _, so := range s.Sockets {
+
+				sendnodes(1, *so, nodes...)
+			}
+
+		} else {
+
+			for _, node := range nodes {
+
+				j, _ := json.Marshal(node)
+				so.Emit("addnode", string(j))
+			}
+		}
+	}
+	sendnodes(0, so, nodes...)
 }
