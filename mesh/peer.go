@@ -227,7 +227,7 @@ func (p *Peer) HandleIncomingConnection(input []byte) {
 
 			message.Destination = next_peer.Address
 
-			boss.SendMessageFlowInfo(self.Id, next_peer.Address)
+			boss.SendMessageFlowInfo(self.Id, next_peer.Id)
 			p.send(message, message.Destination)
 
 			fmt.Println("Sending message to", message.FinalDestinationId, "through", next_peer)

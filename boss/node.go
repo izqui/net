@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/izqui/functional"
 	"github.com/izqui/helpers"
 	"io"
@@ -145,7 +144,6 @@ func (n *Node) ListenForConnections(disconnection func()) {
 							}
 						}
 					}
-
 					return
 
 				}, packet.PeerData.ConnectedPeers)
@@ -159,10 +157,10 @@ func (n *Node) ListenForConnections(disconnection func()) {
 
 				if message.To == packet.PeerData.Id {
 
-					fmt.Println(message.To, "received message from", message.From)
+					socket.SendMessage(BossMessage{From: message.From, To: message.To})
 				} else {
 
-					fmt.Println(message.From, "forwards message to", message.To)
+					socket.SendMessage(BossMessage{From: message.From})
 				}
 			}
 		}

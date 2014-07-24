@@ -47,20 +47,21 @@ func (s *SocketServer) Listen(port string) {
 		}
 	}
 
-	socket.Server.On("connection", func(so io.Socket) {
+	socket.Server.On("connection", func(ss io.Socket) {
 
-		s.Sockets = append(s.Sockets, &so)
-		so.On("disconnection", func() {
+		so := &ss
+		s.Sockets = append(s.Sockets, so)
+		(*so).On("disconnection", func() {
 
 			fmt.Println("disconnect")
 			so = nil
 		})
 
-		so.On("addnode", callbackFunction(socket.NodeCallback))
-		so.On("addlink", callbackFunction(socket.LinkCallback))
-		so.On("message", callbackFunction(socket.MessageCallback))
+		(*so).On("addnode", callbackFunction(socket.NodeCallback))
+		(*so).On("addlink", callbackFunction(socket.LinkCallback))
+		(*so).On("message", callbackFunction(socket.MessageCallback))
 
-		socket.ConnectCallback <- so
+		socket.ConnectCallback <- *so
 	})
 
 	socket.Server.On("error", func(so io.Socket, err error) {
@@ -134,4 +135,16 @@ func (s *SocketServer) SendLinks(so io.Socket, links ...Link) {
 		}
 	}
 	sendlinks(0, so, links...)
+}
+
+func (s *SocketServer) SendMessage(message BossMessage) {
+
+	for _, so := range s.Sockets {
+
+		if socket != nil {
+
+			message, _ := json.Marshal(message)
+			(*so).Emit("message", string(message))
+		}
+	}
 }
