@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/izqui/helpers"
@@ -12,7 +13,7 @@ var (
 	interfacePort = flag.String("interface", "7777", "interface port")
 )
 
-var nodes = []*Node{}
+var nodes = NodeSlice{}
 var socket *SocketServer
 
 func init() {
@@ -26,13 +27,6 @@ func main() {
 	socket.NodeCallback = make(DataCallback, 10000)
 	socket.MessageCallback = make(DataCallback)
 	socket.LinkCallback = make(DataCallback)
-
-	socket.OnNode = func(a string) {
-
-		fmt.Println("noud")
-		go BootUpNode(helpers.RandomString(5), 0)
-		fmt.Println("finish")
-	}
 
 	go socket.Listen(*interfacePort)
 
@@ -67,8 +61,28 @@ func main() {
 			go socket.SendNodes(so, nodes...)
 
 		case <-socket.NodeCallback:
-			//Not working for some reason
+
 			go BootUpNode(helpers.RandomString(5), 0)
+
+		case l := <-socket.LinkCallback:
+
+			link := new(Link)
+			json.Unmarshal([]byte(l), link)
+
+			s := nodes.FindNode(link.Source)
+			d := nodes.FindNode(link.Destination)
+
+			go s.ConnectToNode(d.PeerAddress)
+
+		case m := <-socket.MessageCallback:
+
+			message := new(BossMessage)
+			json.Unmarshal([]byte(m), message)
+
+			s := nodes.FindNode(message.From)
+			d := nodes.FindNode(message.To)
+
+			go s.SendMessageToNode(d.Id)
 
 		case <-cb2:
 

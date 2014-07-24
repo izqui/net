@@ -45,6 +45,21 @@ type Node struct {
 	Connections []string `json:"-"`
 }
 
+type NodeSlice []*Node
+
+func (s NodeSlice) FindNode(id string) *Node {
+
+	for _, n := range s {
+
+		if n.Id == id {
+
+			return n
+		}
+	}
+
+	return nil
+}
+
 func BootUpNode(id string, port int) {
 
 	if port == 0 {
@@ -110,8 +125,6 @@ func (n *Node) ListenForConnections(disconnection func()) {
 				n.Id = packet.PeerData.Id
 				n.PeerAddress = packet.PeerData.Address
 
-				socket.SendNodes(nil, n)
-
 				//Figure out what connections to do
 				toadd := functional.Filter(func(p Peer) (f bool) {
 
@@ -138,6 +151,7 @@ func (n *Node) ListenForConnections(disconnection func()) {
 				}, packet.PeerData.ConnectedPeers)
 
 				n.Connections = append(n.Connections, functional.Map(func(p Peer) string { return p.Id }, toadd).([]string)...)
+				socket.SendNodes(nil, n)
 
 			case MessageType:
 				//This can be: I forwarded a message (from, to) or I received a message (from, body)
@@ -153,4 +167,14 @@ func (n *Node) ListenForConnections(disconnection func()) {
 			}
 		}
 	}
+}
+
+func (n *Node) GetLinks() (links []Link) {
+
+	for _, c := range n.Connections {
+
+		links = append(links, Link{Source: n.Id, Destination: c})
+	}
+
+	return links
 }
