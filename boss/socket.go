@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	io "github.com/izqui/go-socket.io"
-	"github.com/izqui/helpers"
+	_ "github.com/izqui/helpers"
 	"net/http"
 )
 
@@ -14,6 +14,7 @@ type DataCallback chan string
 type SocketServer struct {
 	ConnectCallback                             SocketCallback
 	NodeCallback, LinkCallback, MessageCallback DataCallback
+	OnNode                                      func(a string)
 	Sockets                                     []*io.Socket
 
 	Server *io.Server
@@ -45,23 +46,18 @@ func (s *SocketServer) Listen(port string) {
 
 		s.Sockets = append(s.Sockets, &so)
 
+		so.On("addnode", socket.OnNode)
+		so.On("disconnection", func() {
+
+			fmt.Println("disconnect")
+			so = nil
+		})
+
 		//Not working for some reason
 		so.On("addlink", callbackFunction(socket.LinkCallback))
 		so.On("message", callbackFunction(socket.MessageCallback))
 
 		socket.ConnectCallback <- so
-	})
-
-	socket.Server.On("addnode", func(a string) {
-
-		fmt.Println("Add node")
-		go BootUpNode(helpers.RandomString(5), 0)
-		go BootUpNode(helpers.RandomString(5), 0)
-		go BootUpNode(helpers.RandomString(5), 0)
-		go BootUpNode(helpers.RandomString(5), 0)
-		fmt.Println("Nodes")
-		return
-
 	})
 
 	socket.Server.On("error", func(so io.Socket, err error) {

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/izqui/helpers"
 	_ "time"
 )
 
@@ -25,6 +26,12 @@ func main() {
 	socket.NodeCallback = make(DataCallback, 10000)
 	socket.MessageCallback = make(DataCallback)
 	socket.LinkCallback = make(DataCallback)
+
+	socket.OnNode = func(a string) {
+
+		go BootUpNode(helpers.RandomString(5), 0)
+		fmt.Println("finish")
+	}
 
 	go socket.Listen(*interfacePort)
 
@@ -60,6 +67,7 @@ func main() {
 
 		case <-socket.NodeCallback:
 			//Not working for some reason
+			go BootUpNode(helpers.RandomString(5), 0)
 
 		case <-cb2:
 
