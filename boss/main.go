@@ -29,6 +29,7 @@ func main() {
 
 	socket.OnNode = func(a string) {
 
+		fmt.Println("noud")
 		go BootUpNode(helpers.RandomString(5), 0)
 		fmt.Println("finish")
 	}
